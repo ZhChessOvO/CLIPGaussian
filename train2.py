@@ -29,13 +29,15 @@ try:
     TENSORBOARD_FOUND = True
 except ImportError:
     TENSORBOARD_FOUND = False
-# import clip
+import clip
 import csv
 
+from PIL import Image
+import torchvision.transforms as transforms
 
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from):
     # 循环外加载clip，防止重复加载浪费时间
-    # model, preprocess = clip.load("ViT-B/32", device="cuda")
+    model, preprocess = clip.load("ViT-B/32", device="cuda")
 
     # 用于存放debug数据
     # filename = 'regu_data_20240111.csv'
@@ -65,6 +67,9 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     ema_loss_for_log = 0.0
     progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress")
     first_iter += 1
+
+    # 记录上一轮图像特征
+    prev_image_feature = None
 
     for iteration in range(first_iter, 7001):
         if network_gui.conn == None:
@@ -114,11 +119,21 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         Ll1 = l1_loss(image, gt_image)
 
         # 计算clip图像特征差距
-        # with torch.no_grad:
-        # image_feature = model.encode_image(preprocess(viewpoint_cam.original_image).unsqueeze(0).to("cuda"))
-        # gt_feature = model.encode_image(preprocess(viewpoint_cam.original_image).unsqueeze(0).to("cuda"))
-        # Lclip = 1 - torch.nn.functional.cosine_similarity(image_feature, gt_feature, dim=0).item()
-        # writer.writerow((image_feature, gt_feature, Lclip))
+        with torch.no_grad():
+            # 如果原始图像是张量，则需要将其转换为 PIL 图像
+            if isinstance(viewpoint_cam.original_image, torch.Tensor):
+                current_image = transforms.ToPILImage()(viewpoint_cam.original_image)
+
+            image_feature = model.encode_image(preprocess(current_image).unsqueeze(0).to("cuda"))
+            if prev_image_feature is not None:
+                # 如果存在上一轮的特征，计算与当前特征的余弦相似度
+                Lclip = 1 - torch.nn.functional.cosine_similarity(image_feature, prev_image_feature, dim=1).item()
+            else:
+                # 如果不存在上一轮的特征
+                Lclip = 0
+        # writer.writerow((image_feature, Lclip))
+        prev_image_feature = image_feature.detach()
+        # print(Lclip)
 
         # 无监督loss
 
@@ -133,7 +148,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # loss_obj = cls_criterion(logits.unsqueeze(0), gt_obj.unsqueeze(0)).squeeze().mean()
         # loss_obj = loss_obj / torch.log(torch.tensor(num_classes))  # normalize to (0,1)
 
-        loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_loss) + regu_loss
+        loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_loss) + regu_loss + Lclip
         # else:
         #     loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim_loss)
         loss.backward()
