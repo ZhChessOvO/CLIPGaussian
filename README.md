@@ -38,7 +38,9 @@ cd .\viewers\bin
 
 ### How to get the pretrained models and the low-quality datasets (which are mentioned in our paper)
 
-download in Releases
+pretrained models: download in Releases
+
+low-quality datasets: use *blur2.py*
 
 ### Others
 
