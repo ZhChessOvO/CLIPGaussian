@@ -35,6 +35,7 @@ import csv
 from PIL import Image
 import torchvision.transforms as transforms
 
+
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from):
     # 循环外加载clip，防止重复加载浪费时间
     model, preprocess = clip.load("ViT-B/32", device="cuda")
@@ -100,7 +101,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # 这里是修改关键
         if not viewpoint_stack:
             viewpoint_stack = scene.getTrainCameras().copy()
-            regu_loss = loss_cosine_similarity_3d4(gaussians.get_features)
+            # regu_loss = loss_cosine_similarity_3d4(gaussians.get_features)
 
         viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack) - 1))
 
